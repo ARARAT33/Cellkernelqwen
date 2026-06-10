@@ -1,10 +1,12 @@
 ```
-# Build artifacts
+# Compiled and build artifacts
 *.o
 *.obj
 *.out
-build/
-dist/
+*.exe
+*.dll
+*.so
+*.a
 
 # Dependencies
 node_modules/
@@ -16,21 +18,29 @@ __pycache__/
 target/
 .gradle/
 
-# Editors
-.vscode/
-.idea/
+# Logs and temp files
+*.log
+*.tmp
 *.swp
-*.swo
 
-# System
-.DS_Store
-Thumbs.db
+# Environment
 .env
 .env.local
 *.env.*
 
-# Logs
-*.log
+# Editors
+.vscode/
+.idea/
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
 
 # Compressed files
 *.zip
@@ -55,9 +65,4 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
 ```
