@@ -1,0 +1,618 @@
+CellKernel/                                    # ★ True Microkernel OS – Zero‑Trust & Hardened
+│
+├── Makefile                                   # Universal build (kernel, cells, apps, tests)
+├── Kconfig                                    # Kernel & cell configuration menu
+├── LICENSE                                    # MIT + GPLv3 hybrid
+├── README.md                                  # Multilingual (hy, en, ru, ar, zh, fr, de, es)
+│
+├── boot/                                      # ★ SECURE & MEASURED BOOT
+│   ├── efi/
+│   │   ├── efi_main.c
+│   │   ├── efi_pe.c
+│   │   └── protocols.h
+│   ├── bios/
+│   │   ├── boot.asm
+│   │   ├── disk_io.asm
+│   │   └── a20.asm
+│   ├── secure/
+│   │   ├── verify_signature.c                 # Ed25519 kernel signature check
+│   │   ├── tpm_measure.c                      # TPM 2.0 PCR extend
+│   │   ├── secure_enclave.s                   # Intel SGX / AMD SEV stub
+│   │   └── anti_rollback.c                    # Anti-rollback counter
+│   ├── multiboot/
+│   │   └── header.asm
+│   └── bootconfig.ini
+│
+├── kernel/                                    # ★ TRUE MICROKERNEL – Minimal & Isolated
+│   ├── core/                                  # ★ ESSENTIAL CORE ONLY
+│   │   ├── main.c                             # Kernel entry
+│   │   ├── interrupts.c                       # IDT, APIC, exception handlers
+│   │   ├── scheduling.c                       # O(1) scheduler, real‑time, multicore
+│   │   ├── syscalls.c                         # Fast syscall dispatcher
+│   │   ├── panic.c                            # Panic handler + crash dump
+│   │   ├── debug.c                            # Kernel debugger (KDB) – access restricted
+│   │   └── debug_guard.c                      # ★ AI/Untrusted cell debug access blocker
+│   │
+│   ├── memory/                                # ★ MEMORY MANAGEMENT (Zero‑Trust)
+│   │   ├── paging.c                           # 4‑/5‑level paging, PAT, SME/TSME
+│   │   ├── aslr.c                             # Full‑entropy ASLR for kernel & cells
+│   │   ├── guard_pages.c                      # Guard pages, stack protector
+│   │   ├── slab.c                             # Kernel allocator (SLAB/SLUB)
+│   │   ├── frame_alloc.c                      # Physical frame allocator (buddy)
+│   │   ├── mmu_notify.c                       # MMU notifier for cell isolation
+│   │   ├── kmemleak.c                         # Leak detector
+│   │   ├── page_coloring.c                    # ★ Cache coloring (side‑channel mitigation)
+│   │   └── memory_encryption.c                # ★ SME/TSME integration
+│   │
+│   ├── ipc/                                   # ★ ASYNC IPC – Lock‑free & DoS‑resistant
+│   │   ├── message.c                          # ★ Schema‑validated message passing (CoW)
+│   │   ├── channel.c                          # Bidirectional channels, ports
+│   │   ├── notification.c                     # Signals, events, interrupts delivery
+│   │   ├── shared_memory.c                    # ★ Shared memory (atomic ops protected)
+│   │   ├── async_queue.c                      # ★ Lock‑free MPSC queue (full atomics)
+│   │   ├── atomic_ops.c                       # ★ CPU‑level atomics (CAS, FAA)
+│   │   ├── ipc_security.c                     # IPC access control (capabilities)
+│   │   ├── ipc_rate_limit.c                   # ★ Per‑cell message rate limiter
+│   │   └── ipc_quota.c                        # ★ Quota enforcement (linked to cgroups)
+│   │
+│   ├── capabilities/                          # Capability‑based security
+│   │   ├── cspace.c
+│   │   ├── derive.c
+│   │   ├── revoke.c
+│   │   └── mint.c
+│   │
+│   ├── cells/                                 # Cell manager (isolation primitives)
+│   │   ├── cell_create.c
+│   │   ├── cell_destroy.c
+│   │   ├── cell_yield.c
+│   │   ├── cell_acl.c
+│   │   ├── cell_cgroup.c                      # ★ Tightly coupled with IPC quotas
+│   │   ├── cell_migrate.c
+│   │   └── cell_snapshot.c
+│   │
+│   ├── hal/                                   # Hardware Abstraction Layer
+│   │   ├── x86_64/
+│   │   │   ├── cpu.c
+│   │   │   ├── apic.c
+│   │   │   ├── smp.c
+│   │   │   ├── vm.c
+│   │   │   └── mce.c
+│   │   ├── arm64/
+│   │   │   ├── gic.c
+│   │   │   ├── smccc.c
+│   │   │   └── psci.c
+│   │   ├── riscv64/
+│   │   │   ├── plic.c
+│   │   │   └── clint.c
+│   │   ├── loongarch64/
+│   │   │   ├── iocsr.c
+│   │   │   └── eiointc.c
+│   │   └── generic/
+│   │       ├── io.c
+│   │       ├── dma.c
+│   │       ├── acpi.c
+│   │       ├── smbios.c
+│   │       └── iommu.c                        # ★ IOMMU driver (VT‑d, AMD‑Vi, ARM SMMU)
+│   │
+│   └── include/
+│       ├── kernel.h
+│       ├── syscall.h
+│       ├── cell_ipc.h
+│       ├── cell_acl.h
+│       ├── message.h                          # ★ IPC schema definition
+│       ├── atomic_ops.h                       # ★ Atomic operations header
+│       └── iommu.h                            # ★ IOMMU API header
+│
+├── security/                                  # ★ DEFENSE‑IN‑DEPTH
+│   ├── lsm/
+│   │   ├── hooks.c
+│   │   ├── policy_loader.c
+│   │   └── avc.c
+│   ├── sandbox/
+│   │   ├── namespace.c
+│   │   ├── seccomp.c
+│   │   ├── landlock.c
+│   │   └── container.c
+│   ├── honeypot/
+│   │   ├── decoy_cell.c
+│   │   ├── logger.c
+│   │   └── redirector.c
+│   ├── attestation/
+│   │   ├── tpm2_attest.c
+│   │   ├── ima.c
+│   │   ├── evm.c
+│   │   └── remote_verifier.c
+│   ├── crypto/
+│   │   ├── quantum/
+│   │   │   ├── kyber.c
+│   │   │   ├── dilithium.c
+│   │   │   └── sphincs.c
+│   │   ├── classic/
+│   │   │   ├── aes_ni.c
+│   │   │   ├── chacha20.c
+│   │   │   ├── sha3.c
+│   │   │   └── ed25519.c
+│   │   ├── rng.c
+│   │   ├── keywrap.c
+│   │   └── hsm.c
+│   ├── firewall/
+│   │   ├── packet_filter.c
+│   │   ├── cell_firewall.c
+│   │   ├── conntrack.c
+│   │   └── nftables.c
+│   ├── ids/
+│   │   ├── signature.c
+│   │   ├── anomaly.c
+│   │   ├── auditd.c
+│   │   └── response.c
+│   ├── zero_trust/
+│   │   ├── policy_engine.c
+│   │   ├── microsegmentation.c
+│   │   └── trust_calculator.c
+│   ├── tpm/
+│   │   ├── tpm_driver.c
+│   │   ├── tpm_cmd.c
+│   │   ├── tpm_ioctl.h
+│   │   └── tpm_emulator.c
+│   ├── formal_verification/                   # ★ seL4‑style formal proofs
+│   │   ├── kernel_proofs/
+│   │   ├── ipc_proofs/
+│   │   └── model_checker/
+│   └── io_enforcement/                        # ★ IOMMU policy enforcement
+│       ├── iommu_policy.c                     # DMA remapping rules per cell
+│       └── driver_isolation.c                 # Verify all user‑space drivers use IOMMU
+│
+├── drivers/                                   # ★ USER‑SPACE & KERNEL‑SPACE DRIVERS (IOMMU enforced)
+│   ├── framework/
+│   │   ├── device.c
+│   │   ├── driver.c
+│   │   ├── power.c
+│   │   └── sysfs.c
+│   ├── bus/
+│   │   ├── pci.c
+│   │   ├── usb.c
+│   │   ├── acpi.c
+│   │   ├── i2c.c
+│   │   ├── spi.c
+│   │   └── virtio.c
+│   ├── char/
+│   │   ├── keyboard/
+│   │   │   ├── ps2_kbd.c
+│   │   │   ├── usb_kbd.c
+│   │   │   └── input_map.c
+│   │   ├── mouse/
+│   │   │   ├── ps2_mouse.c
+│   │   │   ├── usb_mouse.c
+│   │   │   └── synaptics.c
+│   │   ├── serial/
+│   │   │   ├── 8250.c
+│   │   │   └── 16550.c
+│   │   └── misc/
+│   ├── block/
+│   │   ├── nvme.c
+│   │   ├── ahci.c
+│   │   ├── virtio_blk.c
+│   │   ├── ramdisk.c
+│   │   ├── mbr_gpt.c
+│   │   ├── scsi/
+│   │   │   ├── sd.c
+│   │   │   ├── sr.c
+│   │   │   └── sg.c
+│   │   └── zram/
+│   ├── net/
+│   │   ├── e1000.c
+│   │   ├── r8169.c
+│   │   ├── virtio_net.c
+│   │   ├── wlan/
+│   │   │   ├── ath9k.c
+│   │   │   ├── iwlwifi.c
+│   │   │   └── bcmsdh.c
+│   │   ├── bluetooth/
+│   │   │   ├── btusb.c
+│   │   │   └── hci_uart.c
+│   │   ├── cellular/
+│   │   │   ├── qmi_wwan.c
+│   │   │   ├── mbim.c
+│   │   │   └── iosm.c
+│   │   └── satellite/
+│   ├── display/
+│   │   ├── fbdev.c
+│   │   ├── drm/
+│   │   │   ├── drm_core.c
+│   │   │   ├── i915.c
+│   │   │   ├── amdgpu.c
+│   │   │   └── nouveau.c
+│   │   ├── terminal.c
+│   │   ├── dp_aux.c
+│   │   └── hdmi_cec.c
+│   ├── audio/
+│   │   ├── hda_intel.c
+│   │   ├── usb_audio.c
+│   │   ├── ac97.c
+│   │   └── midi/
+│   ├── sensors/
+│   │   ├── iio_core.c
+│   │   ├── bmp280.c
+│   │   ├── mpu6050.c
+│   │   └── lis3dh.c
+│   ├── camera/
+│   │   ├── v4l2_core.c
+│   │   ├── uvcvideo.c
+│   │   ├── ipu3.c
+│   │   └── rkisp1.c
+│   ├── security/
+│   │   ├── driver_guard.c
+│   │   ├── fault_inject.c
+│   │   ├── driver_sandbox.c
+│   │   └── iommu_check.c                     # ★ Runtime IOMMU validation
+│   └── staging/
+│
+├── filesystems/                               # ★ VFS + MODERN FS STACK
+│   ├── vfs/
+│   │   ├── vfs_open.c
+│   │   ├── vfs_readwrite.c
+│   │   ├── vfs_cache.c
+│   │   ├── vfs_mount.c
+│   │   └── vfs_syscalls.c
+│   ├── ext4/
+│   │   ├── super.c
+│   │   ├── inode.c
+│   │   ├── dir.c
+│   │   ├── extents.c
+│   │   └── journal.c
+│   ├── btrfs/
+│   │   ├── ctree.c
+│   │   ├── extent-tree.c
+│   │   ├── disk-io.c
+│   │   └── send-stream.c
+│   ├── zfs/
+│   │   ├── spa.c
+│   │   ├── dmu.c
+│   │   ├── zil.c
+│   │   └── arc.c
+│   ├── fat32/
+│   ├── exfat/
+│   ├── ntfs/
+│   ├── hfsplus/
+│   ├── apfs/
+│   ├── tmpfs/
+│   ├── procfs/
+│   ├── sysfs/
+│   ├── devfs/
+│   ├── fuse/
+│   ├── overlayfs/
+│   ├── bcachefs/
+│   └── crypto_fs/
+│       ├── keyring.c
+│       ├── crypto_page.c
+│       └── metadata.c
+│
+├── networking/                                # ★ FULL TCP/IP + FIREWALL + VPN + QUIC
+│   ├── stack/
+│   │   ├── skbuff.c
+│   │   ├── netif.c
+│   │   ├── arp.c
+│   │   ├── ipv4.c
+│   │   ├── ipv6.c
+│   │   ├── icmp.c
+│   │   ├── udp.c
+│   │   ├── tcp.c
+│   │   ├── tcp_cubic.c
+│   │   ├── socket.c
+│   │   └── unix.c
+│   ├── firewall/
+│   │   ├── netfilter.c
+│   │   ├── iptables.c
+│   │   ├── ip6tables.c
+│   │   ├── nftables.c
+│   │   └── conntrack.c
+│   ├── vpn/
+│   │   ├── wireguard.c
+│   │   ├── ipsec.c
+│   │   └── openvpn_tun.c
+│   ├── tls/
+│   │   ├── ktls.c
+│   │   ├── handshake.c
+│   │   └── cipher_suites.c
+│   ├── dns/
+│   ├── dhcp/
+│   ├── wireless/
+│   ├── bluetooth/
+│   ├── lwip/
+│   ├── mesh/
+│   ├── quic/
+│   └── ebpf/
+│
+├── ui/                                        # ★ SECURE WINDOWING SYSTEM
+│   ├── compositor/
+│   │   ├── screen.c
+│   │   ├── renderer.c
+│   │   ├── damage.c
+│   │   ├── input.c
+│   │   └── security.c
+│   ├── window_manager/
+│   │   ├── wm.c
+│   │   ├── decoration.c
+│   │   ├── tiling.c
+│   │   └── animations.c
+│   ├── toolkit/
+│   │   ├── widgets/
+│   │   ├── layout.c
+│   │   ├── events.c
+│   │   └── themes.c
+│   ├── fonts/
+│   │   ├── freetype.c
+│   │   ├── harfbuzz.c
+│   │   ├── unicode.c                         # ★ Unicode NFC normalization
+│   │   └── font_cache.c
+│   ├── locale/
+│   │   ├── i18n.c
+│   │   ├── lang_hy.c
+│   │   ├── lang_en.c
+│   │   ├── lang_ru.c
+│   │   └── keyboard_layout.c
+│   ├── accessibility/
+│   │   ├── screen_reader.c
+│   │   ├── magnifier.c
+│   │   └── sticky_keys.c
+│   ├── 3d/
+│   │   ├── openxr.c
+│   │   ├── vulkan_wsi.c
+│   │   └── stereo.c
+│   └── system_apps/
+│       ├── start_menu.c
+│       ├── taskbar.c
+│       ├── shell.c
+│       ├── lock_screen.c
+│       ├── file_manager.c
+│       └── terminal_emu.c
+│
+├── system_services/                           # ★ ALL PRIVILEGED & USER SERVICES
+│   ├── privileged_cells/                      # ★ PRIVILEGED SYSTEM CELLS (moved from kernel)
+│   │   ├── microcode_cell/
+│   │   │   ├── microcode_update.c
+│   │   │   └── microcode_service.c
+│   │   ├── spectre_cell/
+│   │   │   ├── spectre_meltdown.c
+│   │   │   └── mitigation_manager.c
+│   │   ├── crypto_core_cell/
+│   │   │   ├── crypto_core.h
+│   │   │   ├── kernel_crypto_api.c
+│   │   │   └── key_store.c
+│   │   ├── iommu_mgmt_cell/
+│   │   │   └── iommu_daemon.c
+│   │   ├── attestation_cell/
+│   │   │   └── attestation_proxy.c
+│   │   └── debug_bridge/
+│   │       └── debug_interface.c
+│   │
+│   ├── init/
+│   │   ├── init_main.c
+│   │   ├── bootchart.c
+│   │   └── rescue.c
+│   ├── service_manager/
+│   │   ├── unit.c
+│   │   ├── dependency.c
+│   │   ├── cgroup.c
+│   │   └── watchdog.c
+│   ├── logger/
+│   │   ├── journal.c
+│   │   ├── syslog.c
+│   │   └── audit_log.c
+│   ├── power/
+│   │   ├── suspend.c
+│   │   ├── hibernate.c
+│   │   ├── cpufreq.c
+│   │   └── thermal.c
+│   ├── update/
+│   │   ├── updater.c
+│   │   ├── ab_partition.c
+│   │   ├── signature_verify.c
+│   │   └── rollback.c
+│   ├── package_manager/
+│   │   ├── repo.c
+│   │   ├── solver.c
+│   │   ├── install.c
+│   │   ├── sandbox.c
+│   │   └── metadata.c
+│   ├── user/
+│   │   ├── lib/
+│   │   │   ├── libc/
+│   │   │   ├── libm/
+│   │   │   ├── libpthread/
+│   │   │   ├── libdl/
+│   │   │   ├── librt/
+│   │   │   ├── libresolv/
+│   │   │   ├── libcrypt/
+│   │   │   ├── libz/
+│   │   │   ├── libssl/
+│   │   │   ├── libcurl/
+│   │   │   ├── libsqlite/
+│   │   │   └── libSDL/
+│   │   ├── bin/
+│   │   │   ├── sh/
+│   │   │   ├── bash/
+│   │   │   ├── coreutils/
+│   │   │   ├── util_linux/
+│   │   │   ├── procps/
+│   │   │   ├── findutils/
+│   │   │   ├── grep/
+│   │   │   ├── sed/
+│   │   │   └── awk/
+│   │   ├── sbin/
+│   │   ├── etc/
+│   │   ├── home/
+│   │   ├── var/
+│   │   └── tmp/
+│   ├── cron/
+│   ├── dbus/
+│   ├── network_manager/
+│   ├── firewalld/
+│   ├── printing/
+│   ├── bluetooth_manager/
+│   ├── backup/
+│   └── restore/
+│
+├── virtualization/                            # ★ HYPERVISOR & CONTAINER HOST
+│   ├── hypervisor/
+│   │   ├── vmx.c
+│   │   ├── svm.c
+│   │   ├── nested.c
+│   │   └── vmx_timer.c
+│   ├── kvm/
+│   │   ├── kvm_main.c
+│   │   └── kvm_vfio.c
+│   ├── xen/
+│   ├── virtualbox/
+│   ├── qemu/
+│   │   ├── accel/
+│   │   ├── tcg/
+│   │   └── hvf/
+│   └── libvirt/
+│
+├── containers/                                # ★ OCI‑COMPATIBLE CONTAINER RUNTIME
+│   ├── docker/
+│   ├── podman/
+│   ├── lxc/
+│   ├── kubernetes/
+│   │   ├── apiserver/
+│   │   ├── controller/
+│   │   └── cni_plugins/
+│   └── wasm_runtime/
+│
+├── compilers/                                 # ★ FULL TOOLCHAIN
+│   ├── gcc/
+│   ├── llvm/
+│   │   ├── clang/
+│   │   ├── lld/
+│   │   └── compiler_rt/
+│   ├── rustc/
+│   ├── go/
+│   ├── python/
+│   ├── jvm/
+│   ├── dotnet/
+│   ├── wasm_toolchain/
+│   └── cross_compile/
+│
+├── libraries/                                 # ★ APPLICATION LIBRARIES
+│   ├── gui/
+│   │   ├── qt6/
+│   │   ├── gtk4/
+│   │   └── flutter/
+│   ├── multimedia/
+│   ├── database/
+│   ├── scientific/
+│   ├── cryptography/
+│   └── network/
+│
+├── ai/                                        # ★ AI/ML STACK
+│   ├── tensorflow/
+│   ├── pytorch/
+│   ├── onnx/
+│   ├── llm/
+│   ├── npu/
+│   │   ├── huawei_ascend/
+│   │   ├── apple_ane/
+│   │   └── intel_npu/
+│   └── training/
+│
+├── blockchain/                                # ★ CRYPTO‑ECONOMIC SUBSYSTEMS
+│   ├── bitcoin/
+│   ├── ethereum/
+│   ├── solana/
+│   ├── iota/
+│   └── nft/
+│
+├── database/                                  # ★ DATABASE MANAGEMENT SYSTEMS
+│   ├── postgresql/
+│   ├── mysql/
+│   ├── sqlite/
+│   ├── redis/
+│   ├── mongodb/
+│   ├── cassandra/
+│   └── neo4j/
+│
+├── games/                                     # ★ GAMING ENGINE & RUNTIME
+│   ├── engines/
+│   │   ├── godot/
+│   │   ├── bevy/
+│   │   └── raylib/
+│   ├── emulators/
+│   │   ├── pcsx2/
+│   │   ├── dolphin/
+│   │   ├── yuzu/
+│   │   └── dosbox_x/
+│   └── anticheat/
+│
+├── quantum/                                   # ★ POST‑QUANTUM & QUANTUM COMPUTING
+│   ├── qkd/
+│   ├── qiskit/
+│   ├── qsharp/
+│   └── qpu_driver/
+│
+├── cloud/                                     # ★ CLOUD‑NATIVE INTEGRATION
+│   ├── aws/
+│   ├── azure/
+│   ├── gcp/
+│   ├── openstack/
+│   └── kubernetes/
+│
+├── iot/                                       # ★ INTERNET OF THINGS
+│   ├── mqtt/
+│   ├── coap/
+│   ├── lora/
+│   ├── matter/
+│   └── rtos_compat/
+│
+├── automotive/                                # ★ AUTOMOTIVE GRADE LINUX
+│   ├── autosar/
+│   ├── v2x/
+│   ├── openpilot/
+│   └── iso26262/
+│
+├── robotics/                                  # ★ ROBOT OPERATING SYSTEM
+│   ├── ros2/
+│   ├── moveit/
+│   ├── nav2/
+│   └── gazebo/
+│
+├── space/                                     # ★ SATELLITE & DEEP SPACE COMPUTING
+│   ├── ccsds/
+│   ├── cfe/
+│   ├── radiation_hard/
+│   └── isl/
+│
+├── experimental/                              # ★ ISOLATED EXPERIMENTAL/HUMOROUS (OFF‑PRODUCTION)
+│   ├── multiverse/
+│   │   ├── parallel_universe/
+│   │   ├── time_loop/
+│   │   ├── dreamcell/
+│   │   └── micro_dimensions/
+│   ├── extras/
+│   │   ├── coffee_machine/
+│   │   ├── pet_feeder/
+│   │   ├── wifi_tea/
+│   │   ├── artificial_general_intelligence/   # ★ Fully isolated from kernel
+│   │   └── universe_simulation/
+│   ├── bad_ideas/
+│   │   ├── rm_rf_root.c
+│   │   ├── fork_bomb_preventer.c
+│   │   └── windows_compatibility.c
+│   └── research/
+│       ├── formal_hypervisor/
+│       ├── dma_attack_simulator/
+│       └── rowhammer_tester/
+│
+└── security_audit/                            # ★ INDEPENDENT SECURITY AUDIT SUBSYSTEM
+    ├── static_analysis/
+    │   ├── coverity_rules/
+    │   ├── clang_analyzer_configs/
+    │   └── semgrep_rules/
+    ├── fuzzing/
+    │   ├── syzkaller/
+    │   ├── afl_targets/
+    │   └── ipc_fuzzer.c                       # ★ IPC fuzzer test scenario
+    └── compliance/
+        ├── cis_benchmarks/
+        ├── common_criteria/
+        └── do178c/
