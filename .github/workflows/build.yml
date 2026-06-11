@@ -1,0 +1,39 @@
+name: Build CellKernel OS
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install System Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y make nasm grub-pc-bin xorriso wget bzip2
+
+    - name: Install x86_64-elf Toolchain
+      run: |
+        # Ներբեռնում ենք պատրաստի bare-metal x86_64-elf կոմպիլյատորը
+        wget https://github.com/stivale/x86_64-elf-toolchain/releases/download/v12.2.0/x86_64-elf-gcc-12.2.0-Linux-x86_64.tar.xz
+        tar -xf x86_64-elf-gcc-12.2.0-Linux-x86_64.tar.xz
+        # Ավելացնում ենք PATH-ի մեջ, որպեսզի Makefile-ը տեսնի x86_64-elf-gcc-ն
+        echo "$(pwd)/x86_64-elf/bin" >> $GITHUB_PATH
+
+    - name: Compile CellKernel OS
+      run: |
+        make clean
+        make
+
+    - name: Upload Output Binaries and ISO
+      uses: actions/upload-artifact@v4
+      with:
+        name: cellkernel-iso-output
+        path: output/
