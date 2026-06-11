@@ -23,9 +23,16 @@ jobs:
         mkdir -p iso_root/boot/grub
         mkdir -p iso_root/etc
         
-        # 1. Պատճենում ենք քո Python ֆայլերը ISO-ի կառուցվածքի մեջ
-        cp cellkernel.py iso_root/
-        if [ -f config.py ]; then cp config.py iso_root/; fi
+        # 1. Պատճենում ենք քո Python ֆայլերը src թղթապանակից ISO-ի մեջ
+        if [ -f src/cellkernel.py ]; then
+          cp src/cellkernel.py iso_root/
+        else
+          echo "Warning: cellkernel.py not found in src/, checking root..."
+          cp cellkernel.py iso_root/ || exit 1
+        fi
+        
+        # Եթե ունես նաև config.py կամ այլ ֆայլեր src-ում, սա ավտոմատ կվերցնի
+        if [ -f src/config.py ]; then cp src/config.py iso_root/; fi
         
         # 2. Ստեղծում ենք GRUB-ի ճիշտ կոնֆիգուրացիան
         cat << 'EOF' > iso_root/boot/grub/grub.cfg
