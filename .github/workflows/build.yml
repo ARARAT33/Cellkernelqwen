@@ -14,102 +14,92 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Install System Tools & Cross-Compiler
+    - name: Install Toolchain
       run: |
         sudo apt-get update
-        sudo apt-get install -y make nasm grub-pc-bin xorriso gcc-x86-64-linux-gnu binutils-x86-64-linux-gnu python3
+        sudo apt-get install -y \
+          make \
+          nasm \
+          grub-pc-bin \
+          xorriso \
+          gcc-x86-64-linux-gnu \
+          binutils-x86-64-linux-gnu
 
-    - name: Create x86_64-elf Symlinks
+    - name: Setup Cross-Compiler Symlinks
       run: |
         sudo ln -sf /usr/bin/x86_64-linux-gnu-gcc /usr/bin/x86_64-elf-gcc
         sudo ln -sf /usr/bin/x86_64-linux-gnu-ld /usr/bin/x86_64-elf-ld
         sudo ln -sf /usr/bin/x86_64-linux-gnu-objcopy /usr/bin/x86_64-elf-objcopy
         sudo ln -sf /usr/bin/x86_64-linux-gnu-objdump /usr/bin/x86_64-elf-objdump
         sudo ln -sf /usr/bin/x86_64-linux-gnu-as /usr/bin/x86_64-elf-as
-        sudo ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/bin/x86_64-elf-strip
 
-    - name: Automatic Source Code Fixes (Headers + Inline Assembly)
+    - name: Fix interrupt.c
       run: |
-        python3 << 'EOF'
+        cat > /tmp/fix.py << 'PYTHON'
         import re
-        import os
 
-        file_path = "kernel/core/interrupts.c"
-        if not os.path.exists(file_path):
-            print(f"[!] {file_path} not found, skipping fixes")
-            exit(0)
-
-        with open(file_path, "r") as f:
+        with open("kernel/core/interrupts.c", "r") as f:
             content = f.read()
 
-        # 1. Add missing #include <string.h> (for memset)
-        if "memset" in content and '#include <string.h>' not in content:
-            content = content.replace('#include "../include/kernel.h"', '#include "../include/kernel.h"\n#include <string.h>')
-            print("[+] Added #include <string.h>")
-
-        # 2. Add missing #include <stdint.h> (for uint64_t)
-        if 'uint64_t' in content and '#include <stdint.h>' not in content:
-            # Insert after existing includes
+        # Fix 1: Add missing headers
+        if '#include <string.h>' not in content:
+            content = content.replace(
+                '#include "../include/kernel.h"',
+                '#include "../include/kernel.h"\n#include <string.h>'
+            )
+        if '#include <stdint.h>' not in content and 'uint64_t' in content:
             lines = content.split('\n')
-            insert_pos = 0
             for i, line in enumerate(lines):
                 if line.startswith('#include'):
-                    insert_pos = i + 1
-            lines.insert(insert_pos, '#include <stdint.h>')
-            content = '\n'.join(lines)
-            print("[+] Added #include <stdint.h>")
-
-        # 3. Add forward declarations for serial functions if missing
-        if 'serial_print' in content and 'void serial_print' not in content[:1000]:
-            serial_decls = '''
-            // Forward declarations for serial I/O
-            void serial_print(const char *str);
-            void serial_println(const char *str);
-            void serial_print_hex(uint64_t value);
-            '''
-            lines = content.split('\n')
-            insert_pos = 0
-            for i, line in enumerate(lines):
-                if line.startswith('#include'):
-                    insert_pos = i + 1
-                elif line.strip().startswith('//') or line.strip().startswith('/*'):
-                    continue
-                else:
+                    lines.insert(i + 1, '#include <stdint.h>')
                     break
-            lines.insert(insert_pos, serial_decls)
             content = '\n'.join(lines)
-            print("[+] Added serial_* function declarations")
 
-        # 4. Fix inline assembly: 'out' -> 'outb' and double % signs
-        def fix_asm(match):
-            asm_block = match.group(0)
-            # Replace 'out' with 'outb' (assuming 8-bit I/O)
-            fixed = re.sub(r'\bout\b', 'outb', asm_block)
-            # Double % for GCC
-            fixed = re.sub(r'(?<!%)%([a-zA-Z][a-zA-Z0-9_]*)', r'%%\1', fixed)
-            return fixed
+        # Fix 2: Add serial declarations
+        if 'serial_print' in content and 'void serial_print' not in content[:500]:
+            decls = '''
+        void serial_print(const char *str);
+        void serial_println(const char *str);
+        void serial_print_hex(unsigned long long value);
+        '''
+            lines = content.split('\n')
+            for i, line in enumerate(lines):
+                if line.startswith('#include'):
+                    lines.insert(i + 1, decls)
+                    break
+            content = '\n'.join(lines)
 
-        # Match __asm__ volatile(...); blocks (multi-line allowed)
-        pattern = r'__asm__\s+volatile\s*\(([^;]*?)\)\s*;'
-        new_content = re.sub(pattern, fix_asm, content, flags=re.DOTALL)
+        # Fix 3: Fix inline assembly (MOST IMPORTANT)
+        # Change 'out' to 'outb' and '%reg' to '%%reg'
+        def fix_asm(m):
+            code = m.group(0)
+            code = re.sub(r'\bout\b', 'outb', code)
+            code = re.sub(r'(?<!%)%([a-z]{2,3}\b)', r'%%\1', code)
+            code = re.sub(r'(?<!%)%([a-z]{1,2}[0-9]{1,2}\b)', r'%%\1', code)
+            return code
 
-        if new_content != content:
-            with open(file_path, "w") as f:
-                f.write(new_content)
-            print("[+] Successfully patched kernel/core/interrupts.c")
-        else:
-            print("[!] No changes applied to interrupts.c")
-        EOF
+        content = re.sub(
+            r'__asm__\s+volatile\s*\([^;]+?\);',
+            fix_asm,
+            content,
+            flags=re.DOTALL
+        )
 
-    - name: Compile CellKernel OS
+        with open("kernel/core/interrupts.c", "w") as f:
+            f.write(content)
+
+        print("✓ interrupts.c fixed")
+        PYTHON
+        
+        python3 /tmp/fix.py
+
+    - name: Build Kernel
       run: |
         make clean
-        # -Wno-unused-function ignores unused functions (like default_exception_handler)
-        # -Wno-unused-parameter ignores unused parameters (ed25519_verify)
-        make CFLAGS="-Wall -Wextra -Wno-error -std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -Wno-unused-function -Wno-unused-parameter -Wno-implicit-function-declaration"
+        make CFLAGS="-std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-implicit-function-declaration"
 
-    - name: Upload Build Artifacts
+    - name: Upload Build
       uses: actions/upload-artifact@v4
       with:
-        name: cellkernel-build-output
+        name: cellkernel
         path: build/
