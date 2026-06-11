@@ -5,24 +5,24 @@
 # Architecture selection (x86_64, arm64, riscv64, loongarch64)
 ARCH ?= x86_64
 
-# Cross-compiler toolchain
+# Cross-compiler toolchain (use system compiler if cross-compiler not available)
 ifeq ($(ARCH), x86_64)
-    CROSS_COMPILE ?= x86_64-elf-
+    CROSS_COMPILE ?= x86_64-linux-gnu-
     ARCH_CFLAGS := -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2
     ARCH_LDFLAGS := -m elf_x86_64
     BOOT_ARCH := bios/x86_64
 else ifeq ($(ARCH), arm64)
-    CROSS_COMPILE ?= aarch64-elf-
+    CROSS_COMPILE ?= aarch64-linux-gnu-
     ARCH_CFLAGS := -march=armv8-a -mgeneral-regs-only
     ARCH_LDFLAGS := -m aarch64elf
     BOOT_ARCH := bios/arm64
 else ifeq ($(ARCH), riscv64)
-    CROSS_COMPILE ?= riscv64-elf-
+    CROSS_COMPILE ?= riscv64-linux-gnu-
     ARCH_CFLAGS := -march=rv64imafdc -mabi=lp64d
     ARCH_LDFLAGS := -m elf64lriscv
     BOOT_ARCH := bios/riscv64
 else ifeq ($(ARCH), loongarch64)
-    CROSS_COMPILE ?= loongarch64-elf-
+    CROSS_COMPILE ?= loongarch64-linux-gnu-
     ARCH_CFLAGS := -march=loongarch64
     ARCH_LDFLAGS := -m elf64loongarch
     BOOT_ARCH := bios/loongarch64
@@ -74,7 +74,7 @@ LDFLAGS := -T $(KERNEL_DIR)/linker.ld \
            -z max-page-size=0x1000 \
            -Map=$(BUILD_DIR)/kernel.map
 
-# Source files
+# Source files - dynamically find all existing .c files
 BOOT_SRCS := $(wildcard boot/secure/*.c)
 KERNEL_SRCS := $(wildcard kernel/core/*.c) \
                $(wildcard kernel/memory/*.c) \
@@ -82,20 +82,21 @@ KERNEL_SRCS := $(wildcard kernel/core/*.c) \
                $(wildcard kernel/capabilities/*.c) \
                $(wildcard kernel/cells/*.c) \
                $(wildcard kernel/hal/$(ARCH)/*.c) \
-               $(wildcard kernel/hal/generic/*.c)
-SECURITY_SRCS := $(wildcard security/crypto/classic/*.c) \
-                 $(wildcard security/crypto/quantum/*.c) \
-                 $(wildcard security/lsm/*.c)
+               $(wildcard kernel/hal/generic/*.c) \
+               $(wildcard filesystems/vfs/*.c)
 
 # Object files
 BOOT_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BOOT_SRCS))
 KERNEL_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_SRCS))
-SECURITY_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SECURITY_SRCS))
-ALL_OBJS := $(BOOT_OBJS) $(KERNEL_OBJS) $(SECURITY_OBJS)
+ALL_OBJS := $(BOOT_OBJS) $(KERNEL_OBJS)
 
 # Default target
 .PHONY: all
 all: dirs $(KERNEL_BIN)
+
+# Build target (alias for all)
+.PHONY: build
+build: all
 
 # Create build directories
 .PHONY: dirs
@@ -109,9 +110,7 @@ dirs:
 	@mkdir -p $(BUILD_DIR)/kernel/cells
 	@mkdir -p $(BUILD_DIR)/kernel/hal/$(ARCH)
 	@mkdir -p $(BUILD_DIR)/kernel/hal/generic
-	@mkdir -p $(BUILD_DIR)/security/crypto/classic
-	@mkdir -p $(BUILD_DIR)/security/crypto/quantum
-	@mkdir -p $(BUILD_DIR)/security/lsm
+	@mkdir -p $(BUILD_DIR)/filesystems/vfs
 
 # Link kernel
 $(KERNEL_ELF): $(ALL_OBJS) $(KERNEL_DIR)/linker.ld
