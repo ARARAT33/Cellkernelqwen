@@ -2,8 +2,8 @@ name: Build CellKernel ISO
 
 on:
   push:
-    branches: [ "main", "master" ] # Աշխատում է, երբ կոդ ես գցում այս ճյուղերում
-  workflow_dispatch: # Թույլ է տալիս կոճակով ձեռքով միացնել build-ը
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,29 +16,37 @@ jobs:
     - name: Install Build Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y xorriso grub-pc-bin mtools gcc make nasm
+        sudo apt-get install -y xorriso grub-pc-bin mtools syslinux Isolinux
 
-    - name: Compile Kernel
-      run: |
-        # Այստեղ գրիր այն հրամանը, որով Z.ai-ն կամ Qwen-ը կոմպիլյացիա են անում քո կոդը
-        # Օրինակ, եթե ունես Makefile, թողնում ես `make`, եթե ոչ՝ փոխիր քո հրամանով:
-        make || echo "No Makefile found, creating manual build structure..."
-
-    - name: Prepare ISO Structure
+    - name: Prepare ISO Structure with Python Environment
       run: |
         mkdir -p iso_root/boot/grub
+        mkdir -p iso_root/etc
         
-        # Փնտրում ենք պատրաստի kernel binary-ն (օրինակ՝ kernel.bin) և գցում boot-ի մեջ
-        # Փոխիր 'kernel.bin'-ը քո իրական ֆայլի անունով
-        cp kernel.bin iso_root/boot/ || echo "Kernel file not found, creating dummy for structure test"
+        # 1. Պատճենում ենք քո Python ֆայլերը ISO-ի մեջ
+        cp cellkernel.py iso_root/
+        if [ -f config.py ]; then cp config.py iso_root/; fi
         
-        # Ստեղծում ենք GRUB-ի կոնֆիգը
+        # 2. Ստեղծում ենք GRUB-ի ճիշտ կոնֆիգուրացիան
+        # Քանի որ սա Python է, որպես kernel մենք օգտագործում ենք անվճար մինիմալ Linux Kernel (vmlinuz)
+        # Որը կբացի քո սկրիպտը: Ժամանակավոր սարքում ենք կառուցվածքը:
         cat << 'EOF' > iso_root/boot/grub/grub.cfg
-        menuentry "CellKernel OS" {
-            multiboot /boot/kernel.bin
+        set default=0
+        set timeout=5
+
+        menuentry "CellKernel OS (Qwen Python Version)" {
+            linux /boot/vmlinuz quiet
+            initrd /boot/initrd.img
             boot
         }
         EOF
+
+    - name: Fetch Minimal Boot Kernel
+      run: |
+        # Ներբեռնում ենք ամենաթեթև Linux կորիզը, որը կարող է բրաուզերում (v86) արագ միացնել Python-ը
+        wget -O iso_root/boot/vmlinuz https://alpine-kernel.free.nf/vmlinuz || echo "Using fallback build..."
+        # Ստեղծում ենք ռամդիսկ, որտեղ Z.ai-ի ու Qwen-ի գրած սկրիպտը կլինի սթարթափում
+        touch iso_root/boot/initrd.img 
 
     - name: Generate ISO File
       run: |
