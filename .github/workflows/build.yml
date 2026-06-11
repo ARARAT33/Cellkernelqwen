@@ -28,7 +28,7 @@ jobs:
         sudo ln -sf /usr/bin/x86_64-linux-gnu-as /usr/bin/x86_64-elf-as
         sudo ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/bin/x86_64-elf-strip
 
-    - name: Automatic Source Code Fixes (Inline asm, headers, warnings)
+    - name: Automatic Source Code Fixes (Headers + Inline Assembly)
       run: |
         python3 << 'EOF'
         import re
@@ -42,13 +42,25 @@ jobs:
         with open(file_path, "r") as f:
             content = f.read()
 
-        # 1. Ավելացնել #include <string.h> եթե memset-ն օգտագործվում է
+        # 1. Add missing #include <string.h> (for memset)
         if "memset" in content and '#include <string.h>' not in content:
             content = content.replace('#include "../include/kernel.h"', '#include "../include/kernel.h"\n#include <string.h>')
             print("[+] Added #include <string.h>")
 
-        # 2. Ավելացնել serial_* ֆունկցիաների հայտարարագրեր (եթե բացակայում են)
-        if ('serial_print' in content and 'void serial_print' not in content and 'serial_print' not in content[:500]):
+        # 2. Add missing #include <stdint.h> (for uint64_t)
+        if 'uint64_t' in content and '#include <stdint.h>' not in content:
+            # Insert after existing includes
+            lines = content.split('\n')
+            insert_pos = 0
+            for i, line in enumerate(lines):
+                if line.startswith('#include'):
+                    insert_pos = i + 1
+            lines.insert(insert_pos, '#include <stdint.h>')
+            content = '\n'.join(lines)
+            print("[+] Added #include <stdint.h>")
+
+        # 3. Add forward declarations for serial functions if missing
+        if 'serial_print' in content and 'void serial_print' not in content[:1000]:
             serial_decls = '''
             // Forward declarations for serial I/O
             void serial_print(const char *str);
@@ -68,45 +80,19 @@ jobs:
             content = '\n'.join(lines)
             print("[+] Added serial_* function declarations")
 
-        # 3. Inline assembly-ում out → outb (և կրկնապատկել %-ները)
+        # 4. Fix inline assembly: 'out' -> 'outb' and double % signs
         def fix_asm(match):
             asm_block = match.group(0)
-            # Փոխարինել 'out' → 'outb' (ենթադրելով 8-bit I/O)
+            # Replace 'out' with 'outb' (assuming 8-bit I/O)
             fixed = re.sub(r'\bout\b', 'outb', asm_block)
-            # Կրկնապատկել %-ները GCC-ի համար
+            # Double % for GCC
             fixed = re.sub(r'(?<!%)%([a-zA-Z][a-zA-Z0-9_]*)', r'%%\1', fixed)
             return fixed
 
-        # Կիրառել __asm__ volatile բլոկների վրա (մի քանի տողով)
+        # Match __asm__ volatile(...); blocks (multi-line allowed)
         pattern = r'__asm__\s+volatile\s*\(([^;]*?)\)\s*;'
         new_content = re.sub(pattern, fix_asm, content, flags=re.DOTALL)
-        
-        # 4. Unused functions-ներին ավելացնել __attribute__((used)) առանց static-ի կրկնության
-        # Ճիշտ ձևը՝ static void __attribute__((used)) function_name(...)
-        def add_used_attr(match):
-            prefix = match.group(1)   # 'static' or ''
-            return_type = match.group(2)  # 'void' or other
-            func_name = match.group(3)
-            params = match.group(4)
-            # Կառուցել նոր սահմանումը
-            if prefix:
-                return f"{prefix} {return_type} __attribute__((used)) {func_name}{params}"
-            else:
-                return f"{return_type} __attribute__((used)) {func_name}{params}"
 
-        # Փնտրել static void function_name(...) կամ void function_name(...)
-        # Ապահովել, որ արդեն չկա __attribute__((used))
-        for func in ['default_exception_handler', 'irq_handler']:
-            # Փնտրել (optional static) void func_name(parameters) {
-            pattern = r'^((?:static\s+)?)(void)\s+(' + func + r')\s*\(([^)]*)\)\s*\{'
-            # Եթե արդեն կա __attribute__((used)), բաց թողնել
-            if re.search(r'__attribute__\(\(used\)\)', content):
-                continue
-            new_content = re.sub(pattern, add_used_attr, new_content, flags=re.MULTILINE)
-            if new_content != content:
-                print(f"[+] Added __attribute__((used)) to {func}")
-
-        # Պահպանել փոփոխությունները
         if new_content != content:
             with open(file_path, "w") as f:
                 f.write(new_content)
@@ -118,7 +104,9 @@ jobs:
     - name: Compile CellKernel OS
       run: |
         make clean
-        make CFLAGS="-Wall -Wextra -Wno-error -std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -Wno-unused-function -Wno-implicit-function-declaration"
+        # -Wno-unused-function ignores unused functions (like default_exception_handler)
+        # -Wno-unused-parameter ignores unused parameters (ed25519_verify)
+        make CFLAGS="-Wall -Wextra -Wno-error -std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -Wno-unused-function -Wno-unused-parameter -Wno-implicit-function-declaration"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
