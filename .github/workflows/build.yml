@@ -16,7 +16,7 @@ jobs:
     - name: Install Build Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y xorriso grub-pc-bin mtools syslinux isolinux cpio
+        sudo apt-get install -y xorriso grub-pc-bin mtools syslinux isolinux cpio busybox-static
 
     - name: Prepare ISO Structure
       run: |
@@ -48,17 +48,17 @@ jobs:
         # Ստեղծում ենք հիմնական Linux թղթապանակները
         mkdir -p bin sbin dev proc sys etc root
         
-        # Տեղադրում ենք BusyBox-ի static տարբերակը, որն աշխատում է առանց արտաքին լիբրարիների
-        wget -O bin/busybox https://busybox.net/downloads/binaries/1.35.0-x86_64/busybox
+        # Պատճենում ենք համակարգում տեղադրված պաշտոնական static BusyBox-ը
+        cp /bin/busybox bin/busybox
         chmod +x bin/busybox
         
-        # Սարքում ենք հիմնական հրամանները (sh, ls, echo) BusyBox-ի միջոցով
+        # Սարքում ենք հիմնական հրամանները BusyBox-ի միջոցով
         ./bin/busybox --install -s bin/
         
         # Պատճենում ենք քո Python ֆայլերը ռեպոզիտորիայից այս միջավայրի մեջ
         find ../ -name "*.py" -not -path "*/.*" -exec cp {} ./root/ \;
         
-        # Ստեղծում ենք գլխավոր /init սկրիպտը, որը Linux-ը կմիացնի հենց բեռնվելիս
+        # Ստեղծում ենք գլխավոր /init սկրիպտը
         cat << 'EOF' > init
         #!/bin/sh
         # Միացնում ենք համակարգային ֆայլերը
@@ -72,22 +72,20 @@ jobs:
         echo "Loading Qwen micro-logic architecture..."
         echo ""
         
-        # Քանի որ մինիմալ միջավայրում լիարժեք Python չկա, մենք կոդը կարդում ենք ներկառուցված MicroPython-ով
-        # կամ աշխատեցնում ենք հրամանների տողը (Shell)
         if [ -f /root/cellkernel.py ]; then
             echo "Executing cellkernel.py..."
             echo "----------------------------------------"
-            cat /root/cellkernel.py | head -n 30 # Ցույց է տալիս կոդի սկիզբը էկրանին
+            cat /root/cellkernel.py | head -n 30
             echo "----------------------------------------"
         fi
         
-        # Բացում ենք ավտոնոմ տերմինալը քեզ համար
+        # Բացում ենք ավտոնոմ տերմինալը
         exec /bin/sh
         EOF
         
         chmod +x init
         
-        # Այս ամբողջը փաթեթավորում ենք որպես իրական initrd.img
+        # Փաթեթավորում ենք որպես իրական initrd.img
         find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../iso_root/boot/initrd.img
         cd ..
 
