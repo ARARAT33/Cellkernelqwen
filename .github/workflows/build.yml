@@ -42,17 +42,17 @@ jobs:
         }
         EOF
 
-    - name: Copy Safe System Kernel
+    - name: Fetch Official Minimal Kernel and Initrd
       run: |
-        # Վերցնում ենք GitHub-ի սերվերի վրա արդեն ԻՍԿԱԿԱՆՈՒՄ ԳՈՅՈՒԹՅՈՒՆ ՈՒՆԵՑՈՂ պաշտոնական Linux կորիզը
-        # Սա ապահովագրում է մեզ կիսատ ներբեռնումներից
-        cp /boot/vmlinuz-$(uname -r) iso_root/boot/vmlinuz
+        # Ներբեռնում ենք Alpine Linux-ի պաշտոնական թեթև կորիզը (վստահելի հղումից)
+        wget -O iso_root/boot/vmlinuz https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/netboot/vmlinuz-virt
         
-        # Ստեղծում ենք ժամանակավոր մինիմալ initrd, որ համակարգը բեռնվի
-        touch iso_root/boot/initrd.img 
+        # Ներբեռնում ենք համապատասխան initrd-ն, որն արդեն ունի ներկառուցված Python-ի աջակցություն
+        wget -O iso_root/boot/initrd.img https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/netboot/initramfs-virt
         
-        # Ստուգում ենք կորիզի չափսը, որ համոզվենք՝ դատարկ չէ
+        # Ստուգում ենք, որ ֆայլերը դատարկ չեն
         ls -lh iso_root/boot/vmlinuz
+        ls -lh iso_root/boot/initrd.img
 
     - name: Generate ISO File
       run: |
