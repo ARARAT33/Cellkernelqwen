@@ -37,5 +37,5 @@ jobs:
     - name: Upload Output Binaries
       uses: actions/upload-artifact@v4
       with:
-        name: cellkernel-output
+        name: cellkernel-build-output
         path: build/
