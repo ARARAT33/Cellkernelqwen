@@ -22,20 +22,39 @@ jobs:
     - name: Create x86_64-elf Symlinks
       run: |
         # Ստեղծում ենք սիմվոլիկ հղումներ, որպեսզի քո Makefile-ի CROSS_COMPILE-ը աշխատի առանց փոփոխության
-        sudo ln -s /usr/bin/x86_64-linux-gnu-gcc /usr/bin/x86_64-elf-gcc
-        sudo ln -s /usr/bin/x86_64-linux-gnu-ld /usr/bin/x86_64-elf-ld
-        sudo ln -s /usr/bin/x86_64-linux-gnu-objcopy /usr/bin/x86_64-elf-objcopy
-        sudo ln -s /usr/bin/x86_64-linux-gnu-objdump /usr/bin/x86_64-elf-objdump
-        sudo ln -s /usr/bin/x86_64-linux-gnu-as /usr/bin/x86_64-elf-as
-        sudo ln -s /usr/bin/x86_64-linux-gnu-strip /usr/bin/x86_64-elf-strip
+        sudo ln -sf /usr/bin/x86_64-linux-gnu-gcc /usr/bin/x86_64-elf-gcc
+        sudo ln -sf /usr/bin/x86_64-linux-gnu-ld /usr/bin/x86_64-elf-ld
+        sudo ln -sf /usr/bin/x86_64-linux-gnu-objcopy /usr/bin/x86_64-elf-objcopy
+        sudo ln -sf /usr/bin/x86_64-linux-gnu-objdump /usr/bin/x86_64-elf-objdump
+        sudo ln -sf /usr/bin/x86_64-linux-gnu-as /usr/bin/x86_64-elf-as
+        sudo ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/bin/x86_64-elf-strip
 
     - name: Compile CellKernel OS
       run: |
         make clean
         make
 
+    - name: Check Build Artifacts
+      run: |
+        if [ -d build/ ]; then
+          echo "Build directory exists"
+          ls -la build/
+        else
+          echo "Build directory not found"
+          exit 1
+        fi
+
     - name: Upload Output Binaries
       uses: actions/upload-artifact@v4
       with:
         name: cellkernel-build-output
         path: build/
+        retention-days: 30
+
+    - name: Build Status
+      if: success()
+      run: echo "✅ Build completed successfully!"
+
+    - name: Build Failed
+      if: failure()
+      run: echo "❌ Build failed. Check logs above."
