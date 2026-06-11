@@ -1,0 +1,52 @@
+#!/bin/sh
+# CellKernel OS Init Script
+# Main initialization script for boot process
+
+echo "========================================"
+echo "       CellKernel Qwen OS v1.0         "
+echo "========================================"
+echo ""
+
+# Mount virtual filesystems
+echo "[INIT] Mounting proc..."
+mount -t proc proc /proc 2>/dev/null || true
+
+echo "[INIT] Mounting sysfs..."
+mount -t sysfs sysfs /sys 2>/dev/null || true
+
+echo "[INIT] Mounting devtmpfs..."
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+
+# Set hostname
+echo "cellkernel" > /proc/sys/kernel/hostname 2>/dev/null || true
+
+# Network configuration
+echo "[INIT] Configuring network..."
+ifconfig lo 127.0.0.1 up 2>/dev/null || true
+
+# Start system services
+echo "[INIT] Starting system services..."
+
+# Check for Python scripts
+if [ -f /root/cellkernel.py ]; then
+    echo "[INIT] Found cellkernel.py"
+    echo "----------------------------------------"
+    head -n 20 /root/cellkernel.py
+    echo "----------------------------------------"
+fi
+
+# Display welcome message
+echo ""
+echo "========================================"
+echo "  System Ready                         "
+echo "========================================"
+echo ""
+echo "Available commands:"
+echo "  ls, cat, echo, mkdir, cp, mv, rm"
+echo "  python3 (if available)"
+echo ""
+echo "Type 'exit' to shutdown"
+echo ""
+
+# Start shell
+exec /bin/sh
