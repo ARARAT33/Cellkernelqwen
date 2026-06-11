@@ -62,7 +62,7 @@ jobs:
             xauth \
             cpio \
             gzip \
-            libarchive-tools
+            busybox-static
 
       - name: Prepare root filesystem (initrd)
         if: matrix.platform == 'linux'
@@ -70,42 +70,19 @@ jobs:
           echo "Preparing initrd root filesystem..."
           mkdir -p initrd_root/{bin,sbin,etc,proc,sys,dev,usr/bin,usr/sbin,lib,lib64}
           
-          # Try to find busybox or use alternative approach
-          if command -v busybox &> /dev/null; then
-            BUSYBOX_PATH=$(which busybox)
+          # Use busybox-static which we just installed
+          BUSYBOX_PATH="/usr/bin/busybox-static"
+          
+          if [ -f "$BUSYBOX_PATH" ]; then
             cp "$BUSYBOX_PATH" initrd_root/bin/busybox
             chmod +x initrd_root/bin/busybox
             cd initrd_root/bin
             ./busybox --install -s .
             cd ../..
-            echo "✓ Using system busybox"
-          elif [ -f "/bin/busybox" ]; then
-            cp /bin/busybox initrd_root/bin/busybox
-            chmod +x initrd_root/bin/busybox
-            cd initrd_root/bin
-            ./busybox --install -s . || true
-            cd ../..
-            echo "✓ Using /bin/busybox"
+            echo "✓ Using busybox-static"
           else
-            echo "⚠ busybox not found, creating minimal rootfs with essential tools"
-            # Copy essential binaries from host system
-            for cmd in sh bash ls cp mv rm mkdir cat echo sleep init; do
-              if command -v $cmd &> /dev/null; then
-                CMD_PATH=$(which $cmd)
-                cp "$CMD_PATH" initrd_root/bin/ 2>/dev/null || true
-                # Copy required libraries
-                ldd "$CMD_PATH" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read lib; do
-                  if [ -f "$lib" ]; then
-                    DEST_DIR="initrd_root/lib"
-                    if [[ "$lib" == */lib64/* ]]; then
-                      DEST_DIR="initrd_root/lib64"
-                    fi
-                    mkdir -p "$DEST_DIR"
-                    cp "$lib" "$DEST_DIR/" 2>/dev/null || true
-                  fi
-                done
-              fi
-            done
+            echo "ERROR: busybox-static not found at $BUSYBOX_PATH"
+            exit 1
           fi
           
           # Create essential device nodes (ignore errors in CI)
@@ -125,14 +102,37 @@ jobs:
           echo "root:x:0:" > initrd_root/etc/group
           echo "nameserver 8.8.8.8" > initrd_root/etc/resolv.conf
           
+          # Copy Python files if they exist
+          find .. -name "*.py" -not -path "*/\.*" -exec cp {} initrd_root/root/ \; 2>/dev/null || true
+          
           # Create init script
           cat > initrd_root/init << 'EOF'
-#!/bin/sh
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-mount -t devtmpfs devtmpfs /dev
-echo "Cellkernelqwen OS booting..."
-exec /bin/sh
+#!/bin/busybox sh
+
+# Mount system virtual filesystems
+/bin/busybox mount -t proc proc /proc
+/bin/busybox mount -t sysfs sysfs /sys
+/bin/busybox mount -t devtmpfs devtmpfs /dev
+
+/bin/busybox clear
+echo "========================================"
+echo "       Welcome to CellKernel OS         "
+echo "========================================"
+echo "Loading Qwen micro-logic architecture..."
+echo ""
+
+if [ -f /root/cellkernel.py ]; then
+    echo "Found cellkernel.py in system storage!"
+    echo "----------------------------------------"
+    /bin/busybox cat /root/cellkernel.py | /bin/busybox head -n 30
+    echo "----------------------------------------"
+else
+    echo "No python scripts found in root directory."
+fi
+
+echo "Opening system emergency shell..."
+# Open autonomous terminal
+exec /bin/busybox sh
 EOF
           chmod +x initrd_root/init
           
