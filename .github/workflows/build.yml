@@ -2,7 +2,7 @@ name: Build CellKernel ISO
 
 on:
   push:
-    branches: [ "**" ] # Աշխատում է բոլոր բրենչների (branches) վրա անխտիր
+    branches: [ "**" ]
   workflow_dispatch:
 
 jobs:
@@ -23,11 +23,10 @@ jobs:
         mkdir -p iso_root/boot/grub
         mkdir -p iso_root/etc
         
-        # 1. Ավտոմատ փնտրում և պատճենում ենք ՑԱՆԿԱՑԱԾ Python ֆայլ, որը կա ռեպոզիտորիայում
+        # 1. Փնտրում և պատճենում ենք բոլոր Python ֆայլերը
         echo "Searching for Python files..."
         find . -name "*.py" -not -path "*/.*" -exec cp {} iso_root/ \;
         
-        # Ստուգում ենք, թե ինչ ֆայլեր հավաքվեցին ISO-ի արմատում
         echo "Files copied to ISO root:"
         ls -la iso_root/
 
@@ -37,17 +36,23 @@ jobs:
         set timeout=5
 
         menuentry "CellKernel OS (Qwen Python Version)" {
-            linux /boot/vmlinuz quiet
+            linux /boot/vmlinuz quiet console=ttyS0
             initrd /boot/initrd.img
             boot
         }
         EOF
 
-    - name: Fetch Minimal Boot Kernel
+    - name: Copy Safe System Kernel
       run: |
-        # Ներբեռնում ենք մինիմալ Linux կորիզը, որը կմիացնի Python սկրիպտը
-        wget -O iso_root/boot/vmlinuz https://alpine-kernel.free.nf/vmlinuz || echo "Using fallback build..."
+        # Վերցնում ենք GitHub-ի սերվերի վրա արդեն ԻՍԿԱԿԱՆՈՒՄ ԳՈՅՈՒԹՅՈՒՆ ՈՒՆԵՑՈՂ պաշտոնական Linux կորիզը
+        # Սա ապահովագրում է մեզ կիսատ ներբեռնումներից
+        cp /boot/vmlinuz-$(uname -r) iso_root/boot/vmlinuz
+        
+        # Ստեղծում ենք ժամանակավոր մինիմալ initrd, որ համակարգը բեռնվի
         touch iso_root/boot/initrd.img 
+        
+        # Ստուգում ենք կորիզի չափսը, որ համոզվենք՝ դատարկ չէ
+        ls -lh iso_root/boot/vmlinuz
 
     - name: Generate ISO File
       run: |
