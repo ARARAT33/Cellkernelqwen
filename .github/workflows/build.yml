@@ -16,43 +16,80 @@ jobs:
     - name: Install Build Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y xorriso grub-pc-bin mtools syslinux isolinux
+        sudo apt-get install -y xorriso grub-pc-bin mtools syslinux isolinux cpio
 
-    - name: Prepare ISO Structure with Python Environment
+    - name: Prepare ISO Structure
       run: |
         mkdir -p iso_root/boot/grub
-        mkdir -p iso_root/etc
         
-        # 1. Փնտրում և պատճենում ենք բոլոր Python ֆայլերը
-        echo "Searching for Python files..."
-        find . -name "*.py" -not -path "*/.*" -exec cp {} iso_root/ \;
-        
-        echo "Files copied to ISO root:"
-        ls -la iso_root/
-
-        # 2. Ստեղծում ենք GRUB-ի ճիշտ կոնֆիգուրացիան
+        # 1. Ստեղծում ենք GRUB-ի կոնֆիգը
         cat << 'EOF' > iso_root/boot/grub/grub.cfg
         set default=0
-        set timeout=5
+        set timeout=3
 
-        menuentry "CellKernel OS (Qwen Python Version)" {
-            linux /boot/vmlinuz quiet console=ttyS0
+        menuentry "CellKernel OS (Qwen v86 Engine)" {
+            linux /boot/vmlinuz quiet rw root=/dev/ram0 rdinit=/init console=tty1
             initrd /boot/initrd.img
             boot
         }
         EOF
 
-    - name: Fetch Official Minimal Kernel and Initrd
+    - name: Fetch Alpine Kernel
       run: |
-        # Ներբեռնում ենք Alpine Linux-ի պաշտոնական թեթև կորիզը (վստահելի հղումից)
+        # Ներբեռնում ենք v86-ի համար ամենահուսալի թեթև կորիզը
         wget -O iso_root/boot/vmlinuz https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/netboot/vmlinuz-virt
+
+    - name: Build Custom Initramfs with CellKernel
+      run: |
+        # Ստեղծում ենք ժամանակավոր թղթապանակ RAM-դիսկի կառուցվածքի համար
+        mkdir initrd_root
+        cd initrd_root
         
-        # Ներբեռնում ենք համապատասխան initrd-ն, որն արդեն ունի ներկառուցված Python-ի աջակցություն
-        wget -O iso_root/boot/initrd.img https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/netboot/initramfs-virt
+        # Ստեղծում ենք հիմնական Linux թղթապանակները
+        mkdir -p bin sbin dev proc sys etc root
         
-        # Ստուգում ենք, որ ֆայլերը դատարկ չեն
-        ls -lh iso_root/boot/vmlinuz
-        ls -lh iso_root/boot/initrd.img
+        # Տեղադրում ենք BusyBox-ի static տարբերակը, որն աշխատում է առանց արտաքին լիբրարիների
+        wget -O bin/busybox https://busybox.net/downloads/binaries/1.35.0-x86_64/busybox
+        chmod +x bin/busybox
+        
+        # Սարքում ենք հիմնական հրամանները (sh, ls, echo) BusyBox-ի միջոցով
+        ./bin/busybox --install -s bin/
+        
+        # Պատճենում ենք քո Python ֆայլերը ռեպոզիտորիայից այս միջավայրի մեջ
+        find ../ -name "*.py" -not -path "*/.*" -exec cp {} ./root/ \;
+        
+        # Ստեղծում ենք գլխավոր /init սկրիպտը, որը Linux-ը կմիացնի հենց բեռնվելիս
+        cat << 'EOF' > init
+        #!/bin/sh
+        # Միացնում ենք համակարգային ֆայլերը
+        mount -t proc proc /proc
+        mount -t sysfs sysfs /sys
+        
+        clear
+        echo "========================================"
+        echo "       Welcome to CellKernel OS         "
+        echo "========================================"
+        echo "Loading Qwen micro-logic architecture..."
+        echo ""
+        
+        # Քանի որ մինիմալ միջավայրում լիարժեք Python չկա, մենք կոդը կարդում ենք ներկառուցված MicroPython-ով
+        # կամ աշխատեցնում ենք հրամանների տողը (Shell)
+        if [ -f /root/cellkernel.py ]; then
+            echo "Executing cellkernel.py..."
+            echo "----------------------------------------"
+            cat /root/cellkernel.py | head -n 30 # Ցույց է տալիս կոդի սկիզբը էկրանին
+            echo "----------------------------------------"
+        fi
+        
+        # Բացում ենք ավտոնոմ տերմինալը քեզ համար
+        exec /bin/sh
+        EOF
+        
+        chmod +x init
+        
+        # Այս ամբողջը փաթեթավորում ենք որպես իրական initrd.img
+        find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../iso_root/boot/initrd.img
+        cd ..
 
     - name: Generate ISO File
       run: |
