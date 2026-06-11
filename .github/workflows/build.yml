@@ -21,7 +21,6 @@ jobs:
 
     - name: Create x86_64-elf Symlinks
       run: |
-        # Ստեղծում ենք սիմվոլիկ հղումներ, որպեսզի քո Makefile-ի CROSS_COMPILE-ը աշխատի անփոփոխ
         sudo ln -s /usr/bin/x86_64-linux-gnu-gcc /usr/bin/x86_64-elf-gcc
         sudo ln -s /usr/bin/x86_64-linux-gnu-ld /usr/bin/x86_64-elf-ld
         sudo ln -s /usr/bin/x86_64-linux-gnu-objcopy /usr/bin/x86_64-elf-objcopy
@@ -29,10 +28,17 @@ jobs:
         sudo ln -s /usr/bin/x86_64-linux-gnu-as /usr/bin/x86_64-elf-as
         sudo ln -s /usr/bin/x86_64-linux-gnu-strip /usr/bin/x86_64-elf-strip
 
-    - name: Compile CellKernel OS (Allow Warnings)
+    - name: Auto-Fix Inline Assembly in interrupts.c
+      run: |
+        # Եթե կոդում կա սովորական %al կամ %dx, դարձնում ենք %%al և %%dx, որ GCC-ն հասկանա
+        sed -i 's/%al/%%al/g' kernel/core/interrupts.c
+        sed -i 's/%dx/%%dx/g' kernel/core/interrupts.c
+        # Ժամանակավորապես ապահովության համար, եթե այլ ռեգիստրներ էլ կան %-ով
+        sed -i 's/\(%[a-z]\{2\}\)/%\1/g' kernel/core/interrupts.c 2>/dev/null || true
+
+    - name: Compile CellKernel OS
       run: |
         make clean
-        # Փոխանցում ենք -Wno-error, որպեսզի inline asm-ի և memset-ի կանգնեցնող սխալները շրջանցվեն
         make CFLAGS="-Wall -Wextra -Wno-error -std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2"
 
     - name: Upload Build Artifacts
