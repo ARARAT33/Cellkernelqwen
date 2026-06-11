@@ -59,7 +59,89 @@ jobs:
             libwayland-dev \
             wayland-protocols \
             xvfb \
-            xauth
+            xauth \
+            cpio \
+            gzip \
+            libarchive-tools
+
+      - name: Prepare root filesystem (initrd)
+        if: matrix.platform == 'linux'
+        run: |
+          echo "Preparing initrd root filesystem..."
+          mkdir -p initrd_root/{bin,sbin,etc,proc,sys,dev,usr/bin,usr/sbin,lib,lib64}
+          
+          # Try to find busybox or use alternative approach
+          if command -v busybox &> /dev/null; then
+            BUSYBOX_PATH=$(which busybox)
+            cp "$BUSYBOX_PATH" initrd_root/bin/busybox
+            chmod +x initrd_root/bin/busybox
+            cd initrd_root/bin
+            ./busybox --install -s .
+            cd ../..
+            echo "✓ Using system busybox"
+          elif [ -f "/bin/busybox" ]; then
+            cp /bin/busybox initrd_root/bin/busybox
+            chmod +x initrd_root/bin/busybox
+            cd initrd_root/bin
+            ./busybox --install -s . || true
+            cd ../..
+            echo "✓ Using /bin/busybox"
+          else
+            echo "⚠ busybox not found, creating minimal rootfs with essential tools"
+            # Copy essential binaries from host system
+            for cmd in sh bash ls cp mv rm mkdir cat echo sleep init; do
+              if command -v $cmd &> /dev/null; then
+                CMD_PATH=$(which $cmd)
+                cp "$CMD_PATH" initrd_root/bin/ 2>/dev/null || true
+                # Copy required libraries
+                ldd "$CMD_PATH" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read lib; do
+                  if [ -f "$lib" ]; then
+                    DEST_DIR="initrd_root/lib"
+                    if [[ "$lib" == */lib64/* ]]; then
+                      DEST_DIR="initrd_root/lib64"
+                    fi
+                    mkdir -p "$DEST_DIR"
+                    cp "$lib" "$DEST_DIR/" 2>/dev/null || true
+                  fi
+                done
+              fi
+            done
+          fi
+          
+          # Create essential device nodes (ignore errors in CI)
+          mkdir -p initrd_root/dev
+          mknod initrd_root/dev/null c 1 3 2>/dev/null || true
+          mknod initrd_root/dev/zero c 1 5 2>/dev/null || true
+          mknod initrd_root/dev/random c 1 8 2>/dev/null || true
+          mknod initrd_root/dev/urandom c 1 9 2>/dev/null || true
+          mknod initrd_root/dev/tty c 5 0 2>/dev/null || true
+          chmod 666 initrd_root/dev/* 2>/dev/null || true
+          
+          # Create essential directories and files
+          mkdir -p initrd_root/proc
+          mkdir -p initrd_root/sys
+          mkdir -p initrd_root/etc
+          echo "root:x:0:0:root:/root:/bin/sh" > initrd_root/etc/passwd
+          echo "root:x:0:" > initrd_root/etc/group
+          echo "nameserver 8.8.8.8" > initrd_root/etc/resolv.conf
+          
+          # Create init script
+          cat > initrd_root/init << 'EOF'
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+echo "Cellkernelqwen OS booting..."
+exec /bin/sh
+EOF
+          chmod +x initrd_root/init
+          
+          # Create initrd image
+          cd initrd_root
+          find . | cpio -o -H newc 2>/dev/null | gzip > ../initrd.img
+          cd ..
+          echo "✓ initrd.img created successfully"
+          ls -lh initrd.img
 
       - name: Install system dependencies (macOS)
         if: matrix.platform == 'darwin'
