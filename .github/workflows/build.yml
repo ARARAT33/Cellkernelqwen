@@ -44,60 +44,68 @@ jobs:
 
         # 1. Ավելացնել #include <string.h> եթե memset-ն օգտագործվում է
         if "memset" in content and '#include <string.h>' not in content:
-            # Ավելացնել kernel.h-ից հետո
             content = content.replace('#include "../include/kernel.h"', '#include "../include/kernel.h"\n#include <string.h>')
             print("[+] Added #include <string.h>")
 
         # 2. Ավելացնել serial_* ֆունկցիաների հայտարարագրեր (եթե բացակայում են)
-        serial_decls = '''
-        // Forward declarations for serial I/O
-        void serial_print(const char *str);
-        void serial_println(const char *str);
-        void serial_print_hex(uint64_t value);
-        '''
-        if ('serial_print' in content and 'void serial_print' not in content):
-            # Տեղադրել ֆայլի սկզբում՝ includes-ներից հետո
+        if ('serial_print' in content and 'void serial_print' not in content and 'serial_print' not in content[:500]):
+            serial_decls = '''
+            // Forward declarations for serial I/O
+            void serial_print(const char *str);
+            void serial_println(const char *str);
+            void serial_print_hex(uint64_t value);
+            '''
             lines = content.split('\n')
             insert_pos = 0
             for i, line in enumerate(lines):
                 if line.startswith('#include'):
                     insert_pos = i + 1
+                elif line.strip().startswith('//') or line.strip().startswith('/*'):
+                    continue
+                else:
+                    break
             lines.insert(insert_pos, serial_decls)
             content = '\n'.join(lines)
             print("[+] Added serial_* function declarations")
 
-        # 3. Ամենակարևորը՝ inline assembly-ում out → outb/outw/outl (ըստ operand-ի չափի)
-        # Փնտրել __asm__ volatile բլոկներ, որոնք պարունակում են "out"
-        def fix_out_instructions(match):
+        # 3. Inline assembly-ում out → outb (և կրկնապատկել %-ները)
+        def fix_asm(match):
             asm_block = match.group(0)
-            # Փոխարինել "out" → "outb" եթե operand-ը 8-բիթանոց է (ալ, %al, $0xXX)
-            # Պարզագույն մոտեցում՝ բոլոր "out" → "outb" (քանի որ x86-64 freestanding-ում սովորաբար byte I/O է)
-            # Ավելի խելացի տարբերակ՝ կարդալ operand-ը: Այստեղ համընդհանուր կերպով դարձնում ենք outb:
+            # Փոխարինել 'out' → 'outb' (ենթադրելով 8-bit I/O)
             fixed = re.sub(r'\bout\b', 'outb', asm_block)
-            # Նաև կրկնապատկել %-ները GCC-ի համար (ինչպես նախորդ fix-ը)
+            # Կրկնապատկել %-ները GCC-ի համար
             fixed = re.sub(r'(?<!%)%([a-zA-Z][a-zA-Z0-9_]*)', r'%%\1', fixed)
             return fixed
 
-        # Կիրառել միայն __asm__ volatile բլոկների վրա (այլ տեքստում out բառը չփոխել)
-        new_content = re.sub(r'__asm__\s+volatile\s*\([^)]+\);', fix_out_instructions, content, flags=re.DOTALL)
+        # Կիրառել __asm__ volatile բլոկների վրա (մի քանի տողով)
+        pattern = r'__asm__\s+volatile\s*\(([^;]*?)\)\s*;'
+        new_content = re.sub(pattern, fix_asm, content, flags=re.DOTALL)
         
-        # Եթե վերևի ռեգուլյար արտահայտությունը չի աշխատում (օրինակ՝ բլոկը բազմատող է), օգտագործենք ավելի հզոր տարբերակ
-        if new_content == content:
-            # Multi-line asm blocks
-            new_content = re.sub(r'__asm__\s+volatile\s*\(([^;]+)\);', 
-                                 lambda m: '__asm__ volatile (' + fix_out_instructions(m.group(0)[:-2]) + ');', 
-                                 content, flags=re.DOTALL)
-        
-        # 4. Unused function-ներին ավելացնել __attribute__((used))
-        unused_funcs = ['default_exception_handler', 'irq_handler']
-        for func in unused_funcs:
-            # Փնտրել "static void func_name(...)" և դարձնել "static void __attribute__((used)) func_name(...)"
-            pattern = r'(static\s+void\s+' + func + r'\s*\([^)]*\))'
-            replacement = r'static void __attribute__((used)) \1'
-            new_content = re.sub(pattern, replacement, new_content)
-            if pattern in new_content:
+        # 4. Unused functions-ներին ավելացնել __attribute__((used)) առանց static-ի կրկնության
+        # Ճիշտ ձևը՝ static void __attribute__((used)) function_name(...)
+        def add_used_attr(match):
+            prefix = match.group(1)   # 'static' or ''
+            return_type = match.group(2)  # 'void' or other
+            func_name = match.group(3)
+            params = match.group(4)
+            # Կառուցել նոր սահմանումը
+            if prefix:
+                return f"{prefix} {return_type} __attribute__((used)) {func_name}{params}"
+            else:
+                return f"{return_type} __attribute__((used)) {func_name}{params}"
+
+        # Փնտրել static void function_name(...) կամ void function_name(...)
+        # Ապահովել, որ արդեն չկա __attribute__((used))
+        for func in ['default_exception_handler', 'irq_handler']:
+            # Փնտրել (optional static) void func_name(parameters) {
+            pattern = r'^((?:static\s+)?)(void)\s+(' + func + r')\s*\(([^)]*)\)\s*\{'
+            # Եթե արդեն կա __attribute__((used)), բաց թողնել
+            if re.search(r'__attribute__\(\(used\)\)', content):
+                continue
+            new_content = re.sub(pattern, add_used_attr, new_content, flags=re.MULTILINE)
+            if new_content != content:
                 print(f"[+] Added __attribute__((used)) to {func}")
-        
+
         # Պահպանել փոփոխությունները
         if new_content != content:
             with open(file_path, "w") as f:
@@ -110,7 +118,6 @@ jobs:
     - name: Compile CellKernel OS
       run: |
         make clean
-        # -Wno-unused-function -Wno-implicit-function-declaration ապահով են եթե վերընթաց fix-երը չաշխատեն
         make CFLAGS="-Wall -Wextra -Wno-error -std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -Wno-unused-function -Wno-implicit-function-declaration"
 
     - name: Upload Build Artifacts
