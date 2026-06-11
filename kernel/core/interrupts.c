@@ -239,17 +239,19 @@ void interrupt_controller_init(void) {
     idt_init();
     
     /* Remap PIC */
-    __asm__ volatile (
-        "mov $0x11, %al; out $0x20, %al; jmp .+2; jmp .+2; jmp .+2;"
-        "mov $0x20, %al; out $0x21, %al; jmp .+2; jmp .+2; jmp .+2;"
-        "mov $0x04, %al; out $0x21, %al; jmp .+2; jmp .+2; jmp .+2;"
-        "mov $0x02, %al; out $0xA1, %al; jmp .+2; jmp .+2; jmp .+2;"
-        "mov $0x01, %al; out $0x21, %al; jmp .+2; jmp .+2; jmp .+2;"
-        "mov $0x01, %al; out $0xA1, %al; jmp .+2; jmp .+2; jmp .+2;"
-        "mov $0x00, %al; out $0x21, %al; jmp .+2; jmp .+2; jmp .+2;"
-        "mov $0x00, %al; out $0xA1, %al;"
-        ::: "eax"
-    );
+   __asm__ volatile (
+    "mov $0x11, %%al; out %%al, $0x20; jmp .+2; jmp .+2; jmp .+2;"
+    "mov $0x20, %%al; out %%al, $0x21; jmp .+2; jmp .+2; jmp .+2;"
+    "mov $0x04, %%al; out %%al, $0x21; jmp .+2; jmp .+2; jmp .+2;"
+    "mov $0x02, %%al; out %%al, $0xA1; jmp .+2; jmp .+2; jmp .+2;"
+    "mov $0x01, %%al; out %%al, $0x21; jmp .+2; jmp .+2; jmp .+2;"
+    "mov $0x01, %%al; out %%al, $0xA1; jmp .+2; jmp .+2; jmp .+2;"
+    "mov $0x00, %%al; out %%al, $0x21; jmp .+2; jmp .+2; jmp .+2;"
+    "mov $0x00, %%al; out %%al, $0xA1;"
+    :
+    :
+    : "eax"
+);
     
     serial_println("[+] IDT initialized");
     
