@@ -276,13 +276,13 @@ int tpm_get_random(uint8_t *buffer, uint32_t size) {
 /* Platform-specific TPM MMIO access (stubs - implemented per architecture) */
 __attribute__((weak))
 void tpm_write_register(uint32_t addr, uint32_t value) {
-    volatile uint32_t *reg = (volatile uint32_t *)(TPM_BASE_ADDR + addr);
+    volatile uint32_t *reg = (volatile uint32_t *)(uintptr_t)(TPM_BASE_ADDR + addr);
     *reg = value;
 }
 
 __attribute__((weak))
 uint32_t tpm_read_register(uint32_t addr) {
-    volatile uint32_t *reg = (volatile uint32_t *)(TPM_BASE_ADDR + addr);
+    volatile uint32_t *reg = (volatile uint32_t *)(uintptr_t)(TPM_BASE_ADDR + addr);
     return *reg;
 }
 
