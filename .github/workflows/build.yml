@@ -2,7 +2,7 @@ name: Build CellKernel ISO
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "**" ] # Աշխատում է բոլոր բրենչների (branches) վրա անխտիր
   workflow_dispatch:
 
 jobs:
@@ -23,17 +23,14 @@ jobs:
         mkdir -p iso_root/boot/grub
         mkdir -p iso_root/etc
         
-        # 1. Պատճենում ենք քո Python ֆայլերը src թղթապանակից ISO-ի մեջ
-        if [ -f src/cellkernel.py ]; then
-          cp src/cellkernel.py iso_root/
-        else
-          echo "Warning: cellkernel.py not found in src/, checking root..."
-          cp cellkernel.py iso_root/ || exit 1
-        fi
+        # 1. Ավտոմատ փնտրում և պատճենում ենք ՑԱՆԿԱՑԱԾ Python ֆայլ, որը կա ռեպոզիտորիայում
+        echo "Searching for Python files..."
+        find . -name "*.py" -not -path "*/.*" -exec cp {} iso_root/ \;
         
-        # Եթե ունես նաև config.py կամ այլ ֆայլեր src-ում, սա ավտոմատ կվերցնի
-        if [ -f src/config.py ]; then cp src/config.py iso_root/; fi
-        
+        # Ստուգում ենք, թե ինչ ֆայլեր հավաքվեցին ISO-ի արմատում
+        echo "Files copied to ISO root:"
+        ls -la iso_root/
+
         # 2. Ստեղծում ենք GRUB-ի ճիշտ կոնֆիգուրացիան
         cat << 'EOF' > iso_root/boot/grub/grub.cfg
         set default=0
