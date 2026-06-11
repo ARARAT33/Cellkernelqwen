@@ -17,7 +17,7 @@ jobs:
     - name: Install System Tools & Cross-Compiler
       run: |
         sudo apt-get update
-        sudo apt-get install -y make nasm grub-pc-bin xorriso gcc-x86-64-linux-gnu binutils-x86-64-linux-gnu
+        sudo apt-get install -y make nasm grub-pc-bin xorriso gcc-x86-64-linux-gnu binutils-x86-64-linux-gnu python3
 
     - name: Create x86_64-elf Symlinks
       run: |
@@ -28,12 +28,35 @@ jobs:
         sudo ln -s /usr/bin/x86_64-linux-gnu-as /usr/bin/x86_64-elf-as
         sudo ln -s /usr/bin/x86_64-linux-gnu-strip /usr/bin/x86_64-elf-strip
 
+    - name: Smart-Fix Inline Assembly via Python
+      run: |
+        python3 -c '
+        import re
+
+        filepath = "kernel/core/interrupts.c"
+        with open(filepath, "r") as f:
+            content = f.read()
+
+        # Գտնում ենք interrupt_controller_init ֆունկցիան և դրա ներսի __asm__ բլոկը
+        def fix_asm(match):
+            asm_block = match.group(0)
+            # Փոխարինում ենք միայն այն % նշանները, որոնց հաջորդում է տառ կամ թիվ, բայց արդեն կրկնապատկված չեն
+            fixed = re.sub(r"(?<!%)%([a-zA-Z0-9]+)", r"%%\1", asm_block)
+            return fixed
+
+        # Կիրառում ենք ֆիլտրը հատուկ __asm__ volatile բլոկների վրա
+        new_content = re.sub(r"__asm__\s+volatile\s*\([^)]+\);", fix_asm, content, flags=re.DOTALL)
+
+        with open(filepath, "w") as f:
+            f.write(new_content)
+        print("[+] Inline Assembly formatted successfully for GCC.")
+        '
+
     - name: Compile CellKernel OS
       run: |
         make clean
-        # Օգտագործում ենք -std=gnu11 (GNU C), որպեսզի inline assembly-ն կոմպիլյատորի կողմից ճիշտ մեկնաբանվի
-        # Նաև ավելացրել ենք -w դրոշակը՝ բոլոր խանգարող warning-ները լռեցնելու համար
-        make CFLAGS="-w -std=gnu11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2"
+        # Վերադառնում ենք քո սկզբնական խիստ C11 ստանդարտին, քանի որ կոդն արդեն ավտոմատ ուղղված է
+        make CFLAGS="-Wall -Wextra -Wno-error -std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
