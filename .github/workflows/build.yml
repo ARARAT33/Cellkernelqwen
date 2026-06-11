@@ -41,31 +41,31 @@ jobs:
 
     - name: Build Custom Initramfs with CellKernel
       run: |
-        # Ստեղծում ենք ժամանակավոր թղթապանակ RAM-դիսկի կառուցվածքի համար
         mkdir initrd_root
         cd initrd_root
         
         # Ստեղծում ենք հիմնական Linux թղթապանակները
         mkdir -p bin sbin dev proc sys etc root
         
-        # Պատճենում ենք համակարգում տեղադրված պաշտոնական static BusyBox-ը
-        cp /bin/busybox bin/busybox
+        # Պատճենում ենք ԻՍԿԱԿԱՆ 100% Static BusyBox-ը
+        cp /usr/bin/busybox-static bin/busybox
         chmod +x bin/busybox
         
-        # Սարքում ենք հիմնական հրամանները BusyBox-ի միջոցով
+        # Սարքում ենք հիմնական հրամանները (sh, ls, cat) BusyBox-ի միջոցով
         ./bin/busybox --install -s bin/
         
-        # Պատճենում ենք քո Python ֆայլերը ռեպոզիտորիայից այս միջավայրի մեջ
+        # Փնտրում և պատճենում ենք քո Python ֆայլերը
         find ../ -name "*.py" -not -path "*/.*" -exec cp {} ./root/ \;
         
         # Ստեղծում ենք գլխավոր /init սկրիպտը
         cat << 'EOF' > init
-        #!/bin/sh
-        # Միացնում ենք համակարգային ֆայլերը
-        mount -t proc proc /proc
-        mount -t sysfs sysfs /sys
+        #!/bin/bin/busybox sh
         
-        clear
+        # Միացնում ենք համակարգային վիրտուալ ֆայլերը
+        /bin/busybox mount -t proc proc /proc
+        /bin/busybox mount -t sysfs sysfs /sys
+        
+        /bin/busybox clear
         echo "========================================"
         echo "       Welcome to CellKernel OS         "
         echo "========================================"
@@ -73,14 +73,17 @@ jobs:
         echo ""
         
         if [ -f /root/cellkernel.py ]; then
-            echo "Executing cellkernel.py..."
+            echo "Found cellkernel.py in system storage!"
             echo "----------------------------------------"
-            cat /root/cellkernel.py | head -n 30
+            /bin/busybox cat /root/cellkernel.py | /bin/busybox head -n 30
             echo "----------------------------------------"
+        else
+            echo "No python scripts found in root directory."
         fi
         
+        echo "Opening system emergency shell..."
         # Բացում ենք ավտոնոմ տերմինալը
-        exec /bin/sh
+        exec /bin/busybox sh
         EOF
         
         chmod +x init
