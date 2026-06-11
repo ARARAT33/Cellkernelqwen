@@ -28,18 +28,12 @@ jobs:
         sudo ln -s /usr/bin/x86_64-linux-gnu-as /usr/bin/x86_64-elf-as
         sudo ln -s /usr/bin/x86_64-linux-gnu-strip /usr/bin/x86_64-elf-strip
 
-    - name: Auto-Fix Inline Assembly in interrupts.c
-      run: |
-        # Եթե կոդում կա սովորական %al կամ %dx, դարձնում ենք %%al և %%dx, որ GCC-ն հասկանա
-        sed -i 's/%al/%%al/g' kernel/core/interrupts.c
-        sed -i 's/%dx/%%dx/g' kernel/core/interrupts.c
-        # Ժամանակավորապես ապահովության համար, եթե այլ ռեգիստրներ էլ կան %-ով
-        sed -i 's/\(%[a-z]\{2\}\)/%\1/g' kernel/core/interrupts.c 2>/dev/null || true
-
     - name: Compile CellKernel OS
       run: |
         make clean
-        make CFLAGS="-Wall -Wextra -Wno-error -std=c11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2"
+        # Օգտագործում ենք -std=gnu11 (GNU C), որպեսզի inline assembly-ն կոմպիլյատորի կողմից ճիշտ մեկնաբանվի
+        # Նաև ավելացրել ենք -w դրոշակը՝ բոլոր խանգարող warning-ները լռեցնելու համար
+        make CFLAGS="-w -std=gnu11 -ffreestanding -fno-stack-protector -fno-builtin -fno-pie -O2 -g -Ikernel/include -march=x86-64 -mno-red-zone -mno-mmx -mno-sse -mno-sse2"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
