@@ -327,4 +327,12 @@ static inline int test_and_clear_bit(int nr, volatile void *addr) {
 #define __likely(x)     __builtin_expect(!!(x), 1)
 #define __unlikely(x)   __builtin_expect(!!(x), 0)
 
+/* ============================================================================
+ * Serial Console Functions (defined in main.c)
+ * ============================================================================ */
+
+void serial_print(const char *str);
+void serial_println(const char *str);
+void serial_print_hex(uint64_t val);
+
 #endif /* CELLKERNEL_KERNEL_H */

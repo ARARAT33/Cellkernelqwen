@@ -4,7 +4,24 @@
  * SPDX-License-Identifier: MIT + GPLv3 hybrid
  */
 
+#include <stdint.h>
+#include <stddef.h>
+
+/* Prevent macro conflicts with system headers */
+#ifndef __always_inline
+#define __always_inline inline __attribute__((always_inline))
+#endif
+
 #include "../include/kernel.h"
+
+/* Implement memset for freestanding environment */
+static void *local_memset(void *s, int c, size_t n) {
+    unsigned char *p = (unsigned char *)s;
+    while (n--) {
+        *p++ = (unsigned char)c;
+    }
+    return s;
+}
 
 #define IDT_ENTRIES         256
 #define ISR_ENTRIES         32
@@ -42,6 +59,11 @@ static idt_ptr_t g_idt_ptr;
 /* Interrupt handlers */
 typedef void (*isr_handler_t)(interrupt_frame_t *frame);
 static isr_handler_t g_isr_handlers[ISR_ENTRIES];
+
+/* Forward declarations for static functions */
+static void idt_init(void);
+static void default_exception_handler(interrupt_frame_t *frame);
+static void irq_handler(interrupt_frame_t *frame);
 
 /* External functions */
 extern void irq0(void);
@@ -101,7 +123,7 @@ static void idt_init(void) {
     g_idt_ptr.limit = sizeof(g_idt) - 1;
     g_idt_ptr.base = (uint64_t)g_idt;
     
-    memset(g_idt, 0, sizeof(g_idt));
+    local_memset(g_idt, 0, sizeof(g_idt));
     
     /* Set up exception gates (present, ring 0, interrupt gate) */
     #define EXCEPTION_GATE(num, handler) \
