@@ -13,7 +13,7 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-  - name: Install Build Tools
+    - name: Install Build Tools
       run: |
         sudo apt-get update
         sudo apt-get install -y xorriso grub-pc-bin mtools syslinux isolinux
@@ -23,13 +23,11 @@ jobs:
         mkdir -p iso_root/boot/grub
         mkdir -p iso_root/etc
         
-        # 1. Պատճենում ենք քո Python ֆայլերը ISO-ի մեջ
+        # 1. Պատճենում ենք քո Python ֆայլերը ISO-ի կառուցվածքի մեջ
         cp cellkernel.py iso_root/
         if [ -f config.py ]; then cp config.py iso_root/; fi
         
         # 2. Ստեղծում ենք GRUB-ի ճիշտ կոնֆիգուրացիան
-        # Քանի որ սա Python է, որպես kernel մենք օգտագործում ենք անվճար մինիմալ Linux Kernel (vmlinuz)
-        # Որը կբացի քո սկրիպտը: Ժամանակավոր սարքում ենք կառուցվածքը:
         cat << 'EOF' > iso_root/boot/grub/grub.cfg
         set default=0
         set timeout=5
@@ -43,9 +41,8 @@ jobs:
 
     - name: Fetch Minimal Boot Kernel
       run: |
-        # Ներբեռնում ենք ամենաթեթև Linux կորիզը, որը կարող է բրաուզերում (v86) արագ միացնել Python-ը
+        # Ներբեռնում ենք մինիմալ Linux կորիզը, որը կմիացնի Python սկրիպտը
         wget -O iso_root/boot/vmlinuz https://alpine-kernel.free.nf/vmlinuz || echo "Using fallback build..."
-        # Ստեղծում ենք ռամդիսկ, որտեղ Z.ai-ի ու Qwen-ի գրած սկրիպտը կլինի սթարթափում
         touch iso_root/boot/initrd.img 
 
     - name: Generate ISO File
